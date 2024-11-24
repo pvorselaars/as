@@ -4,15 +4,15 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BUFFER_SIZE 			32
+#define BUFFER_SIZE       32
 
-#define SYMBOL_DEFINED 		1
-#define SYMBOL_UNDEFINED 	0
+#define SYMBOL_DEFINED    1
+#define SYMBOL_UNDEFINED  0
 #define SYMBOL_SIZE_MAX   16
 
 #define OPCODE_TABLE_SIZE 70
 
-#define WORD_SIZE 				0xff
+#define WORD_SIZE         0xff
 
 void fatal(char *msg)
 {
