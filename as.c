@@ -1,251 +1,240 @@
 #include <ctype.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define BUFFER_SIZE       32
+typedef enum {
+	INVALID,
+	LABEL,
+	MNEMONIC,
+	X,
+	Y,
+	SYMBOL,
+	CONSTANT,
+	L_PARENTHESES,
+	R_PARENTHESES,
+	SEMICOLON,
+	COMMA,
+	POUND,
+	DOLLAR,
+	END,
+	LIST
+} token_type;
 
-#define SYMBOL_DEFINED    1
-#define SYMBOL_UNDEFINED  0
-#define SYMBOL_SIZE_MAX   16
+typedef struct token_t {
+	token_type type;
+	char *value;
+	struct token_t *next;
+} token_t;
 
-#define OPCODE_TABLE_SIZE 70
+static char* mnemonics[] = {
+	"LDA",
+	"RTS"
+};
 
-#define WORD_SIZE         0xff
+int num_mnemonics = sizeof(mnemonics)/sizeof(char*);
 
-void fatal(char *msg)
+bool is_mnemonic(const char *value)
 {
-	if (msg)
-		fprintf(stderr, "%s\n", msg);
-	exit(EXIT_FAILURE);
+
+	for (int i = 0; i < num_mnemonics; i++) {
+		if (strcmp(mnemonics[i], value) == 0)
+			return true;
+	}
+
+	return false;
 }
 
-bool is_label(char *token)
+bool is_hex(char *value)
 {
-	if (isdigit(*token))
-		return false;
 
-	while (*token != '\0') {
-		if (*token == ':') {
-			*token = '\0';
-			return true;
+	while(*value != 0) {
+		if (!((*value >= '0' && *value <= '9') || (*value >= 'a' && *value <= 'f') || (*value >= 'A' && *value <= 'F')))
+			return false;
+
+		value++;
+	}
+
+	return true;
+}
+
+token_t * get_token(char **input)
+{
+	token_t *token = malloc(sizeof(token_t));
+
+	if (!token) {
+		fprintf(stderr, "Unable to allocate token\n");
+		return NULL;
+	}
+
+	token->value = NULL;
+	token->next = NULL;
+
+	char *position = *input;
+
+	while (isspace(*position)) {
+		position++;
+	}
+
+	if (*position == 0) {
+
+		token->type = END;
+
+	} else if (isalpha(*position)) {
+
+		int c = 0;
+		char *str = position;
+		while (isalpha(*position)) {
+			c++;
+			position++;
 		}
 
-		token++;
+		token->value = malloc(sizeof(char)*c+1);
+		strncpy(token->value, str, c);
+		token->value[c] = '\0';
+
+		if (is_mnemonic(token->value)) {
+			token->type = MNEMONIC;
+		} else if (*(position+1) == ':'){
+			token->type = LABEL;
+			position++;
+		} else if (strcmp(token->value,"X") == 0){
+			token->type = X;
+		} else if (strcmp(token->value,"Y") == 0){
+			token->type = Y;
+		} else {
+			token->type = SYMBOL;
+		}
+
+	} else if (*position == '(') {
+		token->type = L_PARENTHESES;
+		position++;
+	} else if (*position == '(') {
+		token->type = L_PARENTHESES;
+		position++;
+	} else if (*position == ')') {
+		token->type = R_PARENTHESES;
+		position++;
+	} else if (*position == ';') {
+		token->type = SEMICOLON;
+		position++;
+	} else if (*position == ',') {
+		token->type = COMMA;
+		position++;
+	} else if (*position == '#') {
+		token->type = POUND;
+		position++;
+	} else if (*position == '$') {
+
+		position++;
+
+		int c = 0;
+		char *str = position;
+		while (isalnum(*position)) {
+			c++;
+			position++;
+		}
+
+		token->value = malloc(sizeof(char)*c+1);
+		strncpy(token->value, str, c);
+		token->value[c] = '\0';
+
+		if (is_hex(token->value)) {
+			token->type = CONSTANT;
+		} else {
+			token->type = INVALID;
+		}
+
+	} else {
+		token->type = INVALID;
+		position++;
 	}
 
-	return false;
+	*input = position;
+	return token;
 }
 
-bool is_symbol(char *token)
-{
-	if (!isdigit(*token))
-		return true;
+void free_tokens(token_t *tokens){
+	
+	token_t *temp;
+	while(tokens != NULL) {
+		temp = tokens;
+		tokens = tokens->next;
 
-	return false;
-}
-
-bool is_comment(char *token)
-{
-	return *token == ';' ? true : false;
-}
-
-typedef struct {
-	char symbol[SYMBOL_SIZE_MAX + 1];
-	unsigned int value;
-	char type;
-} symbol_t;
-
-symbol_t symbol_table[32];
-
-static unsigned int symbols = 0;
-
-symbol_t *get_symbol(char *symbol)
-{
-	for (int i = 0; i < symbols; i++) {
-		if (strcmp(symbol, symbol_table[i].symbol) == 0)
-			return &symbol_table[i];
+		if (temp->value != NULL) {
+			free(temp->value);
+		}
+		free(temp);
 	}
-	return NULL;
 }
 
-symbol_t *create_symbol(char *symbol, unsigned int value, char type)
+int lex(FILE *stream)
 {
-	int n = snprintf(symbol_table[symbols].symbol, SYMBOL_SIZE_MAX, "%s", symbol);
-	if (n == -1)
-		fprintf(stderr, "%s label too large for symbol table\n", symbol);
+	char *line;
+	char *buf = NULL;
+	size_t len = 0;
+	ssize_t num_bytes;
 
-	symbol_table[symbols].value = value;
-	symbol_table[symbols].type = type;
+	token_t *list = NULL;
+	token_t *current = list;
 
-	return &symbol_table[symbols++];
-}
+	while ((num_bytes = getline(&buf, &len, stream))!= -1) {
+		line = buf;
 
-typedef struct {
-	char mnemonic[5];
-	char opcode;
-	char mode;
-	char size;
-} op_t;
+		if (list){
+		 	current->next = get_token(&line);
+			current = current->next;
+		} else {
+			list = get_token(&line);
+			current = list;
+		}
 
-enum {
-	MODE_ABSOLUTE,
-	MODE_ABSOLUTE_INDEXED_INDIRECT,
-	MODE_ABSOLUTE_INDEXED_X,
-	MODE_ABSOLUTE_INDEXED_Y,
-	MODE_ABSOLUTE_INDIRECT,
-	MODE_ACCUMULATOR,
-	MODE_IMMEDIATE,
-	MODE_IMPLIED,
-	MODE_PC_RELATIVE,
-	MODE_STACK,
-	MODE_ZERO_PAGE,
-	MODE_ZERO_PAGE_INDEXED_INDIRECT,
-	MODE_ZERO_PAGE_INDEXED_X,
-	MODE_ZERO_PAGE_INDEXED_Y,
-	MODE_ZERO_PAGE_INDIRECT
-};
+		while (current->type != END) {
 
-op_t opcode_table[OPCODE_TABLE_SIZE] = {
-	{"BRK", 0x00, MODE_STACK, 1},
-	{"ORA", 0x01, MODE_ZERO_PAGE_INDIRECT, 2},
-	{"TSB", 0x04, MODE_ZERO_PAGE, 2},
-	{"ORA", 0x05, MODE_ZERO_PAGE, 2},
-	{"ASL", 0x06, MODE_ZERO_PAGE, 2},
-	{"RMB0", 0x07, MODE_ZERO_PAGE, 2},
-	{"PHP", 0x08, MODE_STACK, 1},
-	{"ORA", 0x09, MODE_IMMEDIATE, 2}
-};
+			// the rest of the line is a comment
+			if (current->type == SEMICOLON)
+			  break;
 
-bool is_mnemonic(char *token)
-{
-
-	for (int i = 0; i < OPCODE_TABLE_SIZE; i++) {
-		if (strcmp(opcode_table[i].mnemonic, token) == 0)
-			return true;
-	}
-
-	return false;
-}
-
-op_t *get_op(char *token, char mode)
-{
-
-	for (int i = 0; i < OPCODE_TABLE_SIZE; i++) {
-		if (strcmp(opcode_table[i].mnemonic, token) == 0 && opcode_table[i].mode == mode)
-			return &opcode_table[i];
-	}
-
-	return NULL;
-}
-
-unsigned int assemble(unsigned int line, char *token, char *code)
-{
-	op_t *op;
-	long x;
-	int bytes = 0;
-
-	// token is not an actual operation
-	if (!is_mnemonic(token)) {
-		fprintf(stderr, "%d: unknown operation %s\n", line, token);
-		return 0;
-	}
-
-	// determine addressing mode by getting arguments
-	for (char *arg = strtok(NULL, " \t\n"); arg != NULL; arg = strtok(NULL, " \t\n")) {
-
-		if (is_comment(arg))
-			break;
-
-		// immediate mode
-		if (*arg == '#') {
-			if (*++arg != '$') {
-				fprintf(stderr, "%d: %s invalid address\n", line, arg);
-			} else {
-				x = strtol(++arg, NULL, 16);
-				if (x > WORD_SIZE) {
-					fprintf(stderr, "%d: %lx argument overflow\n", line, x);
-					return 0;
-				}
-
-				op = get_op(token, MODE_IMMEDIATE);
-				if (op) {
-					code[bytes++] = op->opcode;
-					code[bytes++] = x & WORD_SIZE;
-					return bytes;
-				} else {
-					fprintf(stderr, "%d: invalid addressing mode for %s\n", line, token);
-					return 0;
-				}
+			// invalid token
+			if (current->type == INVALID) {
+				fprintf(stderr, "Invalid token %s\n", current->value);
+				free_tokens(list);
+				return 1;
 			}
+
+			printf("%d: %s\n", current->type, current->value);
+
+		 	current->next = get_token(&line);
+			current = current->next;
 		}
 
 	}
+	
+	free(buf);
+	free_tokens(list);
 
-	return bytes;
-
+	return 0;
 }
 
 int main(int argc, char *argv[])
 {
-	char buffer[BUFFER_SIZE], code[BUFFER_SIZE];
+	if (argc < 2)
+		return 1;
 
-	char *delim = "\t \n";
+	const char *filename = argv[1];
+	FILE *src = fopen(filename, "r");
 
-	unsigned int ln, lc, b = 0;
-
-	symbol_t *sym;
-
-	while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-
-		// Increase the source line number
-		ln++;
-
-		// split the buffer according to the delimiters
-		// and process each token
-		for (char *token = strtok(buffer, delim); token != NULL; token = strtok(NULL, delim)) {
-
-			if (is_comment(token))
-				break;
-
-			if (is_label(token)) {
-				// If the token is a label, search the symbol table.
-				// Add the label as a symbol if it does not exist
-				// or update undefined symbols. If the symbol is 
-				// already defined; throw an error but continue
-
-				sym = get_symbol(token);
-
-				if (sym) {
-
-					if (sym->type == SYMBOL_UNDEFINED) {
-
-						fprintf(stderr, "%d: label %s is doubly defined.\n", ln, token);
-
-					} else {
-
-						sym->type = SYMBOL_DEFINED;
-						sym->value = lc;
-
-					}
-
-				} else {
-					create_symbol(token, lc, SYMBOL_DEFINED);
-				}
-
-				continue;
-			}
-
-			b = assemble(ln, token, code);
-
-			fwrite(&code, sizeof(char), b, stdout);
-
-			lc += b;
-
-			continue;
-		}
+	if (!src) {
+		fprintf(stderr, "Unable to open source file %s\n", filename);
+		return 1;
 	}
 
-	exit(EXIT_SUCCESS);
+	if (lex(src) != 0) {
+		fprintf(stderr, "Failed to lex source file %s\n", filename);
+		return 1;
+	}
+
+	return 0;
+
 }

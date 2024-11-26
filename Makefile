@@ -1,12 +1,34 @@
-SOURCES	  = $(wildcard *.c)
-TOOLS     = $(basename $(SOURCES))
+OBJECTS = as.o
+CFLAGS  = -Wall -Wextra -g
 
-.PHONY: clean
+TARGET = as
 
-all: $(TOOLS)
+VALID_TESTS = $(wildcard tests/valid/*.s)
+INVALID_TESTS = $(wildcard tests/invalid/*.s)
 
-%: %.c
-	$(CC) -Wall -g $^ -o $@
+${TARGET}: $(OBJECTS)
+	$(CC) $(OBJECTS) -o $@
+
+tests: $(TARGET) invalid_tests valid_tests
+
+valid_tests:
+	@for test in $(VALID_TESTS); do \
+		if !(./$(TARGET) $$test > /dev/null); then \
+			echo Failed test: $$test; \
+		fi \
+	done
+
+invalid_tests:
+	@for test in $(INVALID_TESTS); do \
+		if ./$(TARGET) $$test > /dev/null; then \
+			echo Failed test: $$test; \
+		fi \
+	done
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $^ -o $@
 
 clean:
-	rm $(TOOLS)
+	rm -f $(TARGET) $(OBJECTS)
+
+.PHONY: clean valid_tests invalid_tests tests
