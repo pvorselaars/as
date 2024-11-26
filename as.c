@@ -50,7 +50,7 @@ bool is_hex(char *value)
 {
 
 	while (*value != 0) {
-		if !(((*value >= '0' && *value <= '9') ||
+		if (!((*value >= '0' && *value <= '9') ||
 		      (*value >= 'a' && *value <= 'f') || (*value >= 'A' && *value <= 'F')))
 			return false;
 
