@@ -28,12 +28,12 @@ typedef struct token_t {
 	struct token_t *next;
 } token_t;
 
-static char* mnemonics[] = {
+static char *mnemonics[] = {
 	"LDA",
 	"RTS"
 };
 
-int num_mnemonics = sizeof(mnemonics)/sizeof(char*);
+int num_mnemonics = sizeof(mnemonics) / sizeof(char *);
 
 bool is_mnemonic(const char *value)
 {
@@ -49,8 +49,9 @@ bool is_mnemonic(const char *value)
 bool is_hex(char *value)
 {
 
-	while(*value != 0) {
-		if (!((*value >= '0' && *value <= '9') || (*value >= 'a' && *value <= 'f') || (*value >= 'A' && *value <= 'F')))
+	while (*value != 0) {
+		if !(((*value >= '0' && *value <= '9') ||
+		      (*value >= 'a' && *value <= 'f') || (*value >= 'A' && *value <= 'F')))
 			return false;
 
 		value++;
@@ -59,7 +60,7 @@ bool is_hex(char *value)
 	return true;
 }
 
-token_t * get_token(char **input)
+token_t *get_token(char **input)
 {
 	token_t *token = malloc(sizeof(token_t));
 
@@ -90,18 +91,18 @@ token_t * get_token(char **input)
 			position++;
 		}
 
-		token->value = malloc(sizeof(char)*c+1);
+		token->value = malloc(sizeof(char) * c + 1);
 		strncpy(token->value, str, c);
 		token->value[c] = '\0';
 
 		if (is_mnemonic(token->value)) {
 			token->type = MNEMONIC;
-		} else if (*(position+1) == ':'){
+		} else if (*(position + 1) == ':') {
 			token->type = LABEL;
 			position++;
-		} else if (strcmp(token->value,"X") == 0){
+		} else if (strcmp(token->value, "X") == 0) {
 			token->type = X;
-		} else if (strcmp(token->value,"Y") == 0){
+		} else if (strcmp(token->value, "Y") == 0) {
 			token->type = Y;
 		} else {
 			token->type = SYMBOL;
@@ -136,7 +137,7 @@ token_t * get_token(char **input)
 			position++;
 		}
 
-		token->value = malloc(sizeof(char)*c+1);
+		token->value = malloc(sizeof(char) * c + 1);
 		strncpy(token->value, str, c);
 		token->value[c] = '\0';
 
@@ -155,10 +156,11 @@ token_t * get_token(char **input)
 	return token;
 }
 
-void free_tokens(token_t *tokens){
-	
+void free_tokens(token_t * tokens)
+{
+
 	token_t *temp;
-	while(tokens != NULL) {
+	while (tokens != NULL) {
 		temp = tokens;
 		tokens = tokens->next;
 
@@ -169,7 +171,7 @@ void free_tokens(token_t *tokens){
 	}
 }
 
-int lex(FILE *stream)
+int lex(FILE * stream)
 {
 	char *line;
 	char *buf = NULL;
@@ -179,11 +181,11 @@ int lex(FILE *stream)
 	token_t *list = NULL;
 	token_t *current = list;
 
-	while ((num_bytes = getline(&buf, &len, stream))!= -1) {
+	while ((num_bytes = getline(&buf, &len, stream)) != -1) {
 		line = buf;
 
-		if (list){
-		 	current->next = get_token(&line);
+		if (list) {
+			current->next = get_token(&line);
 			current = current->next;
 		} else {
 			list = get_token(&line);
@@ -194,7 +196,7 @@ int lex(FILE *stream)
 
 			// the rest of the line is a comment
 			if (current->type == SEMICOLON)
-			  break;
+				break;
 
 			// invalid token
 			if (current->type == INVALID) {
@@ -205,12 +207,12 @@ int lex(FILE *stream)
 
 			printf("%d: %s\n", current->type, current->value);
 
-		 	current->next = get_token(&line);
+			current->next = get_token(&line);
 			current = current->next;
 		}
 
 	}
-	
+
 	free(buf);
 	free_tokens(list);
 
