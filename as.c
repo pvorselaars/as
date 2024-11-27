@@ -7,19 +7,14 @@
 typedef enum {
 	INVALID,
 	LABEL,
-	MNEMONIC,
-	X,
-	Y,
-	SYMBOL,
+	KEYWORD,
+	IDENTIFIER,
 	CONSTANT,
 	L_PARENTHESES,
 	R_PARENTHESES,
-	SEMICOLON,
 	COMMA,
 	POUND,
-	DOLLAR,
-	END,
-	LIST
+	DOLLAR
 } token_type;
 
 typedef struct token_t {
@@ -28,18 +23,18 @@ typedef struct token_t {
 	struct token_t *next;
 } token_t;
 
-static char *mnemonics[] = {
+static char *keywords[] = {
 	"LDA",
 	"RTS"
 };
 
-int num_mnemonics = sizeof(mnemonics) / sizeof(char *);
+int num_keywords = sizeof(keywords) / sizeof(char *);
 
-bool is_mnemonic(const char *value)
+bool is_keyword(const char *value)
 {
 
-	for (int i = 0; i < num_mnemonics; i++) {
-		if (strcmp(mnemonics[i], value) == 0)
+	for (int i = 0; i < num_keywords; i++) {
+		if (strcmp(keywords[i], value) == 0)
 			return true;
 	}
 
@@ -62,6 +57,8 @@ bool is_hex(char *value)
 
 token_t *get_token(char **input)
 {
+	int c;
+	char *str, *position;
 	token_t *token = malloc(sizeof(token_t));
 
 	if (!token) {
@@ -72,21 +69,22 @@ token_t *get_token(char **input)
 	token->value = NULL;
 	token->next = NULL;
 
-	char *position = *input;
+	position = *input;
 
 	while (isspace(*position)) {
 		position++;
 	}
 
-	if (*position == 0) {
+	if (*position == 0 || *position == ';') {
 
-		token->type = END;
+		free(token);
+		return NULL;
 
 	} else if (isalpha(*position)) {
 
-		int c = 0;
-		char *str = position;
-		while (isalpha(*position)) {
+		c = 0;
+		str = position;
+		while (isalnum(*position)) {
 			c++;
 			position++;
 		}
@@ -95,30 +93,20 @@ token_t *get_token(char **input)
 		strncpy(token->value, str, c);
 		token->value[c] = '\0';
 
-		if (is_mnemonic(token->value)) {
-			token->type = MNEMONIC;
+		if (is_keyword(token->value)) {
+			token->type = KEYWORD;
 		} else if (*(position + 1) == ':') {
 			token->type = LABEL;
 			position++;
-		} else if (strcmp(token->value, "X") == 0) {
-			token->type = X;
-		} else if (strcmp(token->value, "Y") == 0) {
-			token->type = Y;
 		} else {
-			token->type = SYMBOL;
+			token->type = IDENTIFIER;
 		}
 
 	} else if (*position == '(') {
 		token->type = L_PARENTHESES;
 		position++;
-	} else if (*position == '(') {
-		token->type = L_PARENTHESES;
-		position++;
 	} else if (*position == ')') {
 		token->type = R_PARENTHESES;
-		position++;
-	} else if (*position == ';') {
-		token->type = SEMICOLON;
 		position++;
 	} else if (*position == ',') {
 		token->type = COMMA;
@@ -130,8 +118,8 @@ token_t *get_token(char **input)
 
 		position++;
 
-		int c = 0;
-		char *str = position;
+		c = 0;
+		str = position;
 		while (isalnum(*position)) {
 			c++;
 			position++;
@@ -149,6 +137,18 @@ token_t *get_token(char **input)
 
 	} else {
 		token->type = INVALID;
+
+		c = 0;
+		str = position;
+		while (isalnum(*position)) {
+			c++;
+			position++;
+		}
+
+		token->value = malloc(sizeof(char) * c + 1);
+		strncpy(token->value, str, c);
+		token->value[c] = '\0';
+
 		position++;
 	}
 
@@ -171,7 +171,24 @@ void free_tokens(token_t * tokens)
 	}
 }
 
-int lex(FILE * stream)
+bool invalid_token(token_t * tokens)
+{
+	if (tokens == NULL)
+		return false;
+
+	while (tokens->type != INVALID) {
+
+		if (tokens->next != NULL) {
+			tokens = tokens->next;
+		} else {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+token_t *lex(FILE * stream)
 {
 	char *line;
 	char *buf = NULL;
@@ -179,44 +196,35 @@ int lex(FILE * stream)
 	ssize_t num_bytes;
 
 	token_t *list = NULL;
-	token_t *current = list;
+	token_t *prev = NULL;
+	token_t *current = NULL;
 
 	while ((num_bytes = getline(&buf, &len, stream)) != -1) {
 		line = buf;
 
-		if (list) {
-			current->next = get_token(&line);
-			current = current->next;
-		} else {
-			list = get_token(&line);
-			current = list;
-		}
+		while ((current = get_token(&line)) != NULL) {
 
-		while (current->type != END) {
+			if (list == NULL)
+				list = current;
 
-			// the rest of the line is a comment
-			if (current->type == SEMICOLON)
-				break;
+			if (prev != NULL)
+				prev->next = current;
 
 			// invalid token
 			if (current->type == INVALID) {
 				fprintf(stderr, "Invalid token %s\n", current->value);
-				free_tokens(list);
-				return 1;
+			} else {
+				printf("%d: %s\n", current->type, current->value);
 			}
 
-			printf("%d: %s\n", current->type, current->value);
-
-			current->next = get_token(&line);
-			current = current->next;
+			prev = current;
 		}
 
 	}
 
 	free(buf);
-	free_tokens(list);
 
-	return 0;
+	return list;
 }
 
 int main(int argc, char *argv[])
@@ -232,7 +240,9 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (lex(src) != 0) {
+	token_t *list = lex(src);
+
+	if (list == NULL || invalid_token(list)) {
 		fprintf(stderr, "Failed to lex source file %s\n", filename);
 		return 1;
 	}
