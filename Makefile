@@ -13,14 +13,14 @@ tests: $(TARGET) invalid_tests valid_tests
 
 valid_tests:
 	@for test in $(VALID_TESTS); do \
-		if !(./$(TARGET) $$test > /dev/null); then \
+		if !(./$(TARGET) $$test > /dev/null 2>&1); then \
 			echo Failed test: $$test; \
 		fi \
 	done
 
 invalid_tests:
 	@for test in $(INVALID_TESTS); do \
-		if ./$(TARGET) $$test > /dev/null; then \
+		if ./$(TARGET) $$test > /dev/null 2>&1; then \
 			echo Failed test: $$test; \
 		fi \
 	done
