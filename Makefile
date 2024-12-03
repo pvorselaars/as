@@ -1,4 +1,4 @@
-OBJECTS = as.o
+OBJECTS = as.o lexer.o
 CFLAGS  = -Wall -Wextra -g
 
 TARGET = as
