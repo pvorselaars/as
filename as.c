@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "lexer.h"
+#include "parser.h"
 
 int main(int argc, char *argv[])
 {
@@ -18,10 +19,17 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	token *list = lex(src);
+	token *tokens = lex(src);
 
-	if (list == NULL || invalid_token(list)) {
-		fprintf(stderr, "Failed to lex source file %s\n", filename);
+	if (tokens == NULL || invalid_token(tokens)) {
+		fprintf(stderr, "Failed to lex source\n");
+		return 1;
+	}
+
+	ast *tree = parse(tokens);
+
+	if (tree == NULL) {
+		fprintf(stderr, "Failed to parse source \n");
 		return 1;
 	}
 

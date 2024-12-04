@@ -29,5 +29,7 @@ typedef struct token {
 token *lex(FILE*);
 bool invalid_token(token*);
 void free_tokens(token*);
+token *take_token(token*);
+void discard_token(token**);
 
 #endif

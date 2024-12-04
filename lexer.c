@@ -1,6 +1,5 @@
 #include "lexer.h"
 
-
 static char *keywords[] = {
 	"LDA",
 	"RTS"
@@ -134,6 +133,34 @@ token *get_token(char **input)
 	return t;
 }
 
+void discard_token(token ** tokens)
+{
+	token *temp = NULL;
+	if (*tokens != NULL) {
+		temp = *tokens;
+		*tokens = (*tokens)->next;
+
+		if (temp->value != NULL) {
+			free(temp->value);
+		}
+		free(temp);
+	}
+
+	return;
+}
+
+token *take_token(token * tokens)
+{
+	token *temp = NULL;
+	if (tokens != NULL) {
+		temp = tokens;
+		tokens = tokens->next;
+		temp->next = NULL;
+	}
+
+	return temp;
+}
+
 void free_tokens(token * tokens)
 {
 
@@ -190,8 +217,6 @@ token *lex(FILE * stream)
 
 			if (current->type == INVALID) {
 				fprintf(stderr, "Invalid token %s\n", current->value);
-			} else {
-				printf("%d: %s\n", current->type, current->value);
 			}
 
 			prev = current;
